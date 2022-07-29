@@ -1284,11 +1284,15 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     function addRewardSalaryToStake() external nonReentrant{
 
+
         uint _salaryPending=pendingReward(_msgSender(),salary);
 
         require(_salaryPending>0 ,"You do not have Salary pending reward");
 
         UserInfo storage user = userInfo[_msgSender()];
+
+        uint256 _previousAmount = user.amount;
+
 
         uint256 _fee = _salaryPending.mul(depositFeePercent).div(DEPOSIT_FEE_PERCENT_PRECISION);
 
@@ -1297,10 +1301,11 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         uint256 _newAmount = user.amount.add(_salaryPendingsMinusFee);
 
         user.amount = _newAmount;
-
+        
         updateReward(salary);
 
-        user.rewardStake[salary]=0;
+        user.rewardStake[salary] = _previousAmount.mul(accRewardPerShare[salary]).div(ACC_REWARD_PER_SHARE_PRECISION);
+
 
         internalSLRBalance = internalSLRBalance.add(_salaryPendingsMinusFee);
 
@@ -1313,12 +1318,24 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
     }
 
 
+
+     /**
+
+     * @notice Claiù all rewards
+
+
+     */
+
+
+
     function claimReward() public {
 
         UserInfo storage user = userInfo[_msgSender()];
 
+        uint256 _previousAmount = user.amount;
+
         uint256 _len = rewardTokens.length;
-        
+
         for (uint256 i; i < _len; i++) {
 
             IERC20 _token = rewardTokens[i];
@@ -1327,10 +1344,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
             uint256 _previousRewardDebt = user.rewardStake[_token];
 
-            user.rewardStake[_token] = 0;
-
-            uint _previousAmount=user.amount;
-
+            user.rewardStake[_token] = _previousAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION);
 
             if (_previousAmount != 0) {
 
@@ -1338,7 +1352,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
                     .mul(accRewardPerShare[_token])
 
-                    .div(ACC_REWARD_PER_SHARE_PRECISION) 
+                    .div(ACC_REWARD_PER_SHARE_PRECISION)  //100
 
                     .sub(_previousRewardDebt);
 
@@ -1352,13 +1366,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
             }
 
-        }
-
-
-
-
-
-
+         } 
 
     }
 
@@ -1385,8 +1393,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         user.amount = _newAmount;
 
         uint _numberDayOfEntry=(block.timestamp-user.dateOfEntry)/DAY;
-
-        
 
         uint256 _len = rewardTokens.length;
 
@@ -1426,7 +1432,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         uint _withdrawAmount;
         
-        if(_numberDayOfEntry<=30)_withdrawAmount=_amount.sub(_amount.mul(30-_numberDayOfEntry).div(100));
+        if(_numberDayOfEntry<=30)_withdrawAmount=_amount.sub(_amount.mul(30 -_numberDayOfEntry).div(100));
 
         else _withdrawAmount=_amount;
         
@@ -1451,7 +1457,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
     function emergencyWithdraw() external nonReentrant {
 
         UserInfo storage user = userInfo[_msgSender()];
-
 
 
         uint256 _amount = user.amount;
