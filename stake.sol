@@ -830,25 +830,7 @@ pragma solidity ^0.8.14;
 
 
 
-/**
 
- * @title SLR Staking
-
- * @author SLR ECO Finance
-
- * @notice SLRStaking is a contract that allows AGFI deposits and receives AGFI sent from the AGFI staking tax channel
-
- * harvests. Users deposit AGFI and receive a share of what has been sent from the AGFI contract based on their participation of
-
- * the total deposited AGFI.
-
- * This contract is a fork from sJOE, but just rewarding the same token that is staked 
-
- * Every time `updateReward(token)` is called, We distribute the balance of that tokens as rewards to users that are
-
- * currently staking inside this contract, and they can claim it using `withdraw(0)`
-
- */
 
 contract SalaryStaking is Ownable, ReentrancyGuard {
 
@@ -866,6 +848,20 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         uint dateOfEntry;
     }
 
+    /// @notion Info of each reward
+
+    struct RewardInfo{
+        uint256 amount;
+        uint256 numberOfDay;
+        uint256 numberOfDayDistribut;
+        uint256 timeOfAddReward;
+        uint256 lastDistribution;
+    }
+
+
+    mapping(IERC20=> RewardInfo) public reawrdsInfo;
+
+
 
      /// @notice SLR 'token'
 
@@ -873,7 +869,9 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
    
     /// @notice how seconde in day 
 
-    uint DAY=86400;
+    // uint DAY=86400;
+
+    uint256 DAY=60;
 
 
     /// @dev Internal balance of SLR, this gets updated on user deposits / withdrawals
@@ -967,6 +965,9 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
     /// @notice Emitted when user add pending SLR to desposit SLR
 
     event AddPendingReward(uint amount);
+
+
+    event addRewardByNumberDay(uint _amount , uint _numberOfDay,IERC20 _rewardToken);
 
 
 
@@ -1240,7 +1241,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
      */
 
-    function pendingReward(address _user, IERC20 _token) public view returns (uint256) {
+   function pendingReward(address _user, IERC20 _token) public view returns (uint256) {
 
         require(isRewardToken[_token], "AGFIStaking: wrong reward token");
 
@@ -1275,6 +1276,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
             user.amount.mul(_accRewardTokenPerShare).div(ACC_REWARD_PER_SHARE_PRECISION).sub(user.rewardStake[_token]);
 
     }
+
 
      /**
 
@@ -1380,9 +1382,13 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
      */
 
-    function withdraw(uint256 _amount) external nonReentrant {
+       function withdraw(uint256 _amount) external nonReentrant {
 
         UserInfo storage user = userInfo[_msgSender()];
+
+        uint _numberDayOfEntry=(block.timestamp-user.dateOfEntry)/DAY;
+
+        require(_numberDayOfEntry>=30,"You have to wait 30 days");
 
         uint256 _previousAmount = user.amount;
 
@@ -1392,7 +1398,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         user.amount = _newAmount;
 
-        uint _numberDayOfEntry=(block.timestamp-user.dateOfEntry)/DAY;
 
         uint256 _len = rewardTokens.length;
 
@@ -1430,17 +1435,10 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         }
 
-        uint _withdrawAmount;
-        
-        if(_numberDayOfEntry<=30)_withdrawAmount=_amount.sub(_amount.mul(30 -_numberDayOfEntry).div(100));
-
-        else _withdrawAmount=_amount;
         
         internalSLRBalance = internalSLRBalance.sub(_amount);
 
-        salary.safeTransfer(_msgSender(), _withdrawAmount);
-
-        salary.safeTransfer(owner(),_amount.sub(_withdrawAmount));
+        salary.safeTransfer(_msgSender(), _amount);
 
         emit Withdraw(_msgSender(), _amount);
 
@@ -1453,33 +1451,103 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
      * @notice Withdraw without caring about rewards. EMERGENCY ONLY
 
      */
-
     function emergencyWithdraw() external nonReentrant {
 
         UserInfo storage user = userInfo[_msgSender()];
 
+        uint256 _previousAmount = user.amount;
 
-        uint256 _amount = user.amount;
+        uint256 _newAmount = user.amount.sub(_previousAmount);
 
-        user.amount = 0;
+        user.amount = _newAmount;
+
+        uint _numberDayOfEntry=(block.timestamp-user.dateOfEntry)/DAY;
 
         uint256 _len = rewardTokens.length;
 
-        for (uint256 i; i < _len; i++) {
+        if (_previousAmount != 0) {
 
-            IERC20 _token = rewardTokens[i];
+            for (uint256 i; i < _len; i++) {
 
-            user.rewardStake[_token] = 0;
+                IERC20 _token = rewardTokens[i];
+
+                updateReward(_token);
+
+                uint256 _pending = _previousAmount
+
+                    .mul(accRewardPerShare[_token])
+
+                    .div(ACC_REWARD_PER_SHARE_PRECISION)
+
+                    .sub(user.rewardStake[_token]);
+
+                user.rewardStake[_token] = _newAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION);
+
+
+
+                if (_pending != 0) {
+
+                    safeTokenTransfer(_token, _msgSender(), _pending);
+
+                    emit ClaimReward(_msgSender(), address(_token), _pending);
+
+                }
+
+            }
 
         }
 
-        internalSLRBalance = internalSLRBalance.sub(_amount);
+        uint _withdrawAmount;
+        
+        if(_numberDayOfEntry<=30)_withdrawAmount=_previousAmount.sub(_previousAmount.mul(30 -_numberDayOfEntry).div(100));
 
-        salary.safeTransfer(_msgSender(), _amount);
+        else _withdrawAmount=_previousAmount;
+        
+        internalSLRBalance = internalSLRBalance.sub(_previousAmount);
 
-        emit EmergencyWithdraw(_msgSender(), _amount);
+        salary.safeTransfer(_msgSender(), _withdrawAmount);
+
+        salary.safeTransfer(owner(),_previousAmount.sub(_withdrawAmount));
+
+        emit Withdraw(_msgSender(), _previousAmount);
 
     }
+
+
+
+    function addRewardsSalaryByNumberDay(uint _amount , uint _numberOfDay) public onlyOwner {
+
+        require(isRewardToken[salary], "SLRIStaking: token can't be removed");
+
+        require(salary.allowance(_msgSender(),address(this))>=_amount,"this amount not approved by owner");
+
+        reawrdsInfo[salary].amount=reawrdsInfo[salary].amount.add(_amount);
+       
+        reawrdsInfo[salary].numberOfDay=reawrdsInfo[salary].numberOfDay.add(_numberOfDay);
+
+        reawrdsInfo[salary].timeOfAddReward=block.timestamp;
+
+        reawrdsInfo[salary].lastDistribution=block.timestamp;
+
+        emit addRewardByNumberDay(_amount,_numberOfDay,salary);
+
+    }
+
+
+    function numberOfSalaryReward() public view returns(uint256) {
+
+        uint256 _numberOfDay=block.timestamp.sub(reawrdsInfo[salary].lastDistribution).div(DAY);
+
+        if(_numberOfDay>reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut))
+
+        _numberOfDay=reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut);
+
+        if(_numberOfDay==0)return 0;
+
+        else return _numberOfDay.mul(reawrdsInfo[salary].amount).div(reawrdsInfo[salary].numberOfDay);
+        
+    }
+   
 
 
 
@@ -1493,14 +1561,21 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
      */
 
-    function updateReward(IERC20 _token) public {
+   function updateReward(IERC20 _token) public {
 
         require(isRewardToken[_token], "SLRStaking: wrong reward token");
+        
+        if(numberOfSalaryReward() > 0){
+
+            salary.transferFrom(owner(),address(this),numberOfSalaryReward());
+
+            
+
+
+        }
 
 
         uint256 _totalSLR = internalSLRBalance;
-
-
 
         uint256 _currRewardBalance = _token.balanceOf(address(this));
 
@@ -1528,6 +1603,9 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         lastRewardBalance[_token] = _rewardBalance;
 
     }
+
+
+
 
 
 
