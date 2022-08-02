@@ -1565,10 +1565,13 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         require(isRewardToken[_token], "SLRStaking: wrong reward token");
         
-        if(numberOfSalaryReward() > 0){
+        if(numberOfSalaryReward() > 0 && reawrdsInfo[_token].numberOfDay>0 && _token == salary){
 
             salary.transferFrom(owner(),address(this),numberOfSalaryReward());
+ 
+            reawrdsInfo[salary].lastDistribution=block.timestamp;
 
+            reawrdsInfo[salary].numberOfDayDistribut = reawrdsInfo[salary].numberOfDayDistribut.add(numberOfSalaryReward().mul(reawrdsInfo[salary].numberOfDay).div(reawrdsInfo[salary].amount));
             
 
 
