@@ -1549,7 +1549,13 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
     }
    
 
+     function getNuberDaysCanShared() public view returns(uint) {
 
+
+         return
+         
+          numberOfSalaryReward().mul(reawrdsInfo[salary].numberOfDay).div(reawrdsInfo[salary].amount);
+     }
 
     /**
 
@@ -1560,6 +1566,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
      * @dev Needs to be called before any deposit or withdrawal
 
      */
+     
 
    function updateReward(IERC20 _token) public {
 
@@ -1567,13 +1574,11 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         
         if(numberOfSalaryReward() > 0 && reawrdsInfo[_token].numberOfDay>0 && _token == salary){
 
+            reawrdsInfo[salary].numberOfDayDistribut = reawrdsInfo[salary].numberOfDayDistribut.add(getNuberDaysCanShared());
+
             salary.transferFrom(owner(),address(this),numberOfSalaryReward());
  
             reawrdsInfo[salary].lastDistribution=block.timestamp;
-
-            reawrdsInfo[salary].numberOfDayDistribut = reawrdsInfo[salary].numberOfDayDistribut.add(numberOfSalaryReward().mul(reawrdsInfo[salary].numberOfDay).div(reawrdsInfo[salary].amount));
-            
-
 
         }
 
