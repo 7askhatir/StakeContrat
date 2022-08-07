@@ -875,7 +875,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     // uint DAY=86400;
 
-    uint256 DAY=600;
+    uint256 DAY=60;
 
 
     uint MAX_DISPOSIT=200*10**18;
@@ -1088,7 +1088,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         internalSLRBalance = internalSLRBalance.add(_amountMinusFee);
 
-        salary.safeTransferFrom(_msgSender(), feeCollector, _fee);
+        if(_fee>0)salary.safeTransferFrom(_msgSender(), feeCollector, _fee);
 
         salary.safeTransferFrom(_msgSender(), address(this), _amountMinusFee);
 
@@ -1287,7 +1287,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         internalSLRBalance = internalSLRBalance.add(_salaryPendingsMinusFee);
 
-        salary.safeTransferFrom(_msgSender(), feeCollector, _fee);
+        if(_fee>0)salary.safeTransferFrom(_msgSender(), feeCollector, _fee);
 
         salary.safeTransferFrom(_msgSender(), address(this), _salaryPendingsMinusFee);
 
