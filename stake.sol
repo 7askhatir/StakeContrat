@@ -1040,13 +1040,13 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         uint256 _amountMinusFee = _amount.sub(_fee);
 
-        uint256 _previousAmount = user.amount;
-
         uint256 _newAmount = user.amount.add(_amountMinusFee);
         
         user.amount = _newAmount;
 
         if(user.dateOfEntry==0)user.dateOfEntry=block.timestamp;
+
+        else user.dateOfEntry=user.dateOfEntry.mul(DAY);
 
         uint256 _len = rewardTokens.length;
 
@@ -1055,32 +1055,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
             IERC20 _token = rewardTokens[i];
 
             updateReward(_token);
-
-            uint256 _previousRewardDebt = user.rewardStake[_token];
-
-            user.rewardStake[_token] = _newAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION);
-
-
-
-            if (_previousAmount != 0) {
-
-                uint256 _pending = _previousAmount
-
-                    .mul(accRewardPerShare[_token])
-
-                    .div(ACC_REWARD_PER_SHARE_PRECISION)  //100
-
-                    .sub(_previousRewardDebt);
-
-                if (_pending != 0) {
-
-                    safeTokenTransfer(_token, _msgSender(), _pending);
-
-                    emit ClaimReward(_msgSender(), address(_token), _pending);
-
-                }
-
-            }
 
         }
 
@@ -1262,7 +1236,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     function addRewardSalaryToStake() external nonReentrant{
 
-
         uint _salaryPending=pendingReward(_msgSender(),salary);
 
         require(_salaryPending>0 ,"You do not have Salary pending reward");
@@ -1279,11 +1252,10 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         uint256 _newAmount = user.amount.add(_salaryPendingsMinusFee);
 
         user.amount = _newAmount;
-        
+
         updateReward(salary);
 
-        user.rewardStake[salary] = _previousAmount.mul(accRewardPerShare[salary]).div(ACC_REWARD_PER_SHARE_PRECISION);
-
+        user.rewardStake[salary] = _newAmount.mul(accRewardPerShare[salary]).div(ACC_REWARD_PER_SHARE_PRECISION);
 
         internalSLRBalance = internalSLRBalance.add(_salaryPendingsMinusFee);
 
@@ -1349,10 +1321,9 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     /**
      * @notice Withdraw SLR and harvest the rewards
-     * @param _amount The amount of SLR to withdraw
      */
 
-       function withdraw(uint256 _amount) external nonReentrant {
+       function withdraw() external nonReentrant {
 
         UserInfo storage user = userInfo[_msgSender()];
 
@@ -1362,12 +1333,11 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         uint256 _previousAmount = user.amount;
 
-        require(_amount <= _previousAmount, "SLRStaking: withdraw amount exceeds balance");
+        require(_previousAmount > 0 , "SLRStaking: withdraw amount exceeds balance");
 
-        uint256 _newAmount = user.amount.sub(_amount);
+        uint256 _newAmount = user.amount.sub(_previousAmount);
 
         user.amount = _newAmount;
-
 
         uint256 _len = rewardTokens.length;
 
@@ -1406,11 +1376,11 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         }
 
         
-        internalSLRBalance = internalSLRBalance.sub(_amount);
+        internalSLRBalance = internalSLRBalance.sub(_previousAmount);
 
-        salary.safeTransfer(_msgSender(), _amount);
+        salary.safeTransfer(_msgSender(), _previousAmount);
 
-        emit Withdraw(_msgSender(), _amount);
+        emit Withdraw(_msgSender(), _previousAmount);
 
     }
 
