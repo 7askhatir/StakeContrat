@@ -849,6 +849,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
     struct UserInfo {
         uint256 amount;
         mapping(IERC20 => uint256) rewardStake;
+        uint rewardSLRAddToStak;
         uint dateOfEntry;
     }
 
@@ -875,7 +876,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     // uint DAY=86400;
 
-    uint256 DAY=60;
+    uint256 DAY=600;
 
 
     uint MAX_DISPOSIT=200*10**18;
@@ -1046,8 +1047,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
         if(user.dateOfEntry==0)user.dateOfEntry=block.timestamp;
 
-        else user.dateOfEntry=user.dateOfEntry.mul(DAY);
-
         uint256 _len = rewardTokens.length;
 
         for (uint256 i; i < _len; i++) {
@@ -1080,11 +1079,11 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
      * @return The reward debt for the chosen token
      */
 
-    function getUserInfo(address _user, IERC20 _rewardToken) external view returns (uint256, uint256) {
+    function getUserInfo(address _user, IERC20 _rewardToken) external view returns (uint256, uint256,uint,uint) {
 
         UserInfo storage user = userInfo[_user];
 
-        return (user.amount, user.rewardStake[_rewardToken]);
+        return (user.amount, user.rewardStake[_rewardToken],user.rewardSLRAddToStak,user.dateOfEntry);
 
     }
 
@@ -1239,31 +1238,28 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         uint _salaryPending=pendingReward(_msgSender(),salary);
 
         require(_salaryPending>0 ,"You do not have Salary pending reward");
-
+        
         UserInfo storage user = userInfo[_msgSender()];
 
         uint256 _previousAmount = user.amount;
 
+        uint256 _len = rewardTokens.length;
 
-        uint256 _fee = _salaryPending.mul(depositFeePercent).div(DEPOSIT_FEE_PERCENT_PRECISION);
+         user.amount = _previousAmount.add(_salaryPending);
 
-        uint256 _salaryPendingsMinusFee = _salaryPending.sub(_fee);
+        internalSLRBalance = internalSLRBalance.add(_salaryPending);
 
-        uint256 _newAmount = user.amount.add(_salaryPendingsMinusFee);
+        for (uint256 i; i < _len; i++) {
 
-        user.amount = _newAmount;
+            IERC20 _token = rewardTokens[i];
 
-        updateReward(salary);
+            updateReward(_token);
 
-        user.rewardStake[salary] = _newAmount.mul(accRewardPerShare[salary]).div(ACC_REWARD_PER_SHARE_PRECISION);
-
-        internalSLRBalance = internalSLRBalance.add(_salaryPendingsMinusFee);
-
-        if(_fee>0)salary.safeTransferFrom(_msgSender(), feeCollector, _fee);
-
-        salary.safeTransferFrom(_msgSender(), address(this), _salaryPendingsMinusFee);
-
-        emit AddPendingReward(_salaryPendingsMinusFee);
+        }
+       
+        user.rewardSLRAddToStak=user.rewardSLRAddToStak.add(_salaryPending);
+        
+        emit AddPendingReward(_salaryPending);
 
     }
 
@@ -1379,6 +1375,8 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         internalSLRBalance = internalSLRBalance.sub(_previousAmount);
 
         salary.safeTransfer(_msgSender(), _previousAmount);
+
+        if(_previousAmount>0) user.dateOfEntry=0;
 
         emit Withdraw(_msgSender(), _previousAmount);
 
@@ -1499,8 +1497,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
           numberOfSalaryReward().mul(reawrdsInfo[salary].numberOfDay).div(reawrdsInfo[salary].amount);
      }
 
-     //new desposite 200>= but >=200 ----->hanya kolxi
-     //if user withraw ->>> date = 0
 
     /**
      * @notice Update reward variables
