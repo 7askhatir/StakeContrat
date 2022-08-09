@@ -1,16 +1,5 @@
-/**
- *Submitted for verification at BscScan.com on 2022-08-06
-*/
-
 // SPDX-License-Identifier: MIT
-/**
- *Submitted for verification at Etherscan.io on 2022-06-01
-*/
 
-// File: contracts/@openzeppelin/security/ReentrancyGuard.sol
-
-
-// OpenZeppelin Contracts v4.4.1 (security/ReentrancyGuard.sol)
 
 pragma solidity ^0.8.0;
 
@@ -842,18 +831,12 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     using SafeERC20 for IERC20;
 
-
-
-    /// @notice Info of each user
-
     struct UserInfo {
         uint256 amount;
         mapping(IERC20 => uint256) rewardStake;
         uint rewardSLRAddToStak;
         uint dateOfEntry;
     }
-
-    /// @notion Info of each reward
 
     struct RewardInfo{
         uint256 amount;
@@ -866,151 +849,59 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     mapping(IERC20=> RewardInfo) public reawrdsInfo;
 
-
-
-     /// @notice SLR 'token'
-
     IERC20 public salary;
    
-    /// @notice how seconde in day 
-
     // uint DAY=86400;
 
     uint256 DAY=600;
 
-
     uint MAX_DISPOSIT=200*10**18;
 
-
-    /// @dev Internal balance of SLR, this gets updated on user deposits / withdrawals
-
-    /// this allows to reward users with SLR
-
     uint256 public internalSLRBalance;
-
-    /// @notice Array of tokens that users can claim
 
     IERC20[] public rewardTokens;
 
     mapping(IERC20 => bool) public isRewardToken;
 
-    /// @notice Last reward balance of `token`
-
     mapping(IERC20 => uint256) public lastRewardBalance;
-
-
 
     address public feeCollector;
 
-
-
-    /// @notice The deposit fee, scaled to `DEPOSIT_FEE_PERCENT_PRECISION`
-
     uint256 public depositFeePercent;
-
-    /// @notice The precision of `depositFeePercent`
 
     uint256 public DEPOSIT_FEE_PERCENT_PRECISION;
 
-
-
-    /// @notice Accumulated `token` rewards per share, scaled to `ACC_REWARD_PER_SHARE_PRECISION`
-
     mapping(IERC20 => uint256) public accRewardPerShare;
-
-    /// @notice The precision of `accRewardPerShare`
 
     uint256 public ACC_REWARD_PER_SHARE_PRECISION;
 
-
-
-    /// @dev Info of each user that stakes SLR
-
     mapping(address => UserInfo) private userInfo;
-
-
-
-    /// @notice Emitted when a user deposits SLR
 
     event Deposit(address indexed user, uint256 amount, uint256 fee);
 
-
-
-    /// @notice Emitted when owner changes the deposit fee percentage
-
     event DepositFeeChanged(uint256 newFee, uint256 oldFee);
-
-
-
-    /// @notice Emitted when a user withdraws SLR
 
     event Withdraw(address indexed user, uint256 amount);
 
-
-
-    /// @notice Emitted when a user claims reward
-
     event ClaimReward(address indexed user, address indexed rewardToken, uint256 amount);
-
-
-
-    /// @notice Emitted when a user emergency withdraws its SLR
 
     event EmergencyWithdraw(address indexed user, uint256 amount);
 
-
-
-    /// @notice Emitted when owner adds a token to the reward tokens list
-
     event RewardTokenAdded(address token);
-
-
-
-    /// @notice Emitted when owner removes a token from the reward tokens list
 
     event RewardTokenRemoved(address token);
 
-    /// @notice Emitted when user add pending SLR to desposit SLR
-
     event AddPendingReward(uint amount);
-
 
     event addRewardByNumberDay(uint _amount , uint _numberOfDay,IERC20 _rewardToken);
 
    
    
-
-
-
-    /**
-     * @notice Initialize a new SLRStaking contract
-     * @dev This contract needs to receive an ERC20 `_rewardToken` in order to distribute them
-     * @param _usdtReward The address of the ERC20 reward token
-     * @param _salary The address of the Salary token
-     * @param _feeCollector The address where deposit fees will be sent
-     * @param _depositFeePercent The deposit fee percent, scalled to 1e18, e.g. 3% is 3e16
-     */
-
-    constructor(
-
-        IERC20 _usdtReward,
-
-        IERC20 _salary,
-
-        address _feeCollector,
-
-        uint256 _depositFeePercent
-
-    ) {
-
+    constructor(IERC20 _usdtReward,IERC20 _salary,address _feeCollector,uint256 _depositFeePercent) {
         require(address(_usdtReward) != address(0), "SLRStaking: reward token can't be address(0)");
-
         require(address(_salary) != address(0), "SLRStaking: sarary can't be address(0)");
-
         require(_feeCollector != address(0), "SLRStaking: fee collector can't be address(0)");
-
         require(_depositFeePercent <= 5e17, "SLRStaking: max deposit fee can't be greater than 50%");
-
         salary = _salary;
         depositFeePercent = _depositFeePercent;
         feeCollector = _feeCollector;
@@ -1024,574 +915,231 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
     }
 
 
-
-    /**
-     * @notice Deposit SLR for reward token allocation
-     * @param _amount The amount of SLR to deposit
-     */
-
     function deposit(uint256 _amount) external nonReentrant {
-
-        UserInfo storage user = userInfo[_msgSender()];
-
+       UserInfo storage user = userInfo[_msgSender()];
        require(_amount>=MAX_DISPOSIT || user.amount>=200,"Stake must be at least 200 SLR.");
-
-
-        uint256 _fee = _amount.mul(depositFeePercent).div(DEPOSIT_FEE_PERCENT_PRECISION);
-
-        uint256 _amountMinusFee = _amount.sub(_fee);
-
-        uint256 _newAmount = user.amount.add(_amountMinusFee);
-        
-        user.amount = _newAmount;
-
-        if(user.dateOfEntry==0)user.dateOfEntry=block.timestamp;
-
-        uint256 _len = rewardTokens.length;
-
-        for (uint256 i; i < _len; i++) {
-
+       uint256 _fee = _amount.mul(depositFeePercent).div(DEPOSIT_FEE_PERCENT_PRECISION);
+       uint256 _amountMinusFee = _amount.sub(_fee);
+       uint256 _newAmount = user.amount.add(_amountMinusFee);
+       user.amount = _newAmount;
+       if(user.dateOfEntry==0)user.dateOfEntry=block.timestamp;
+       uint256 _len = rewardTokens.length;
+       for (uint256 i; i < _len; i++) {
             IERC20 _token = rewardTokens[i];
-
             updateReward(_token);
-
         }
-
-
-
         internalSLRBalance = internalSLRBalance.add(_amountMinusFee);
-
         if(_fee>0)salary.safeTransferFrom(_msgSender(), feeCollector, _fee);
-
         salary.safeTransferFrom(_msgSender(), address(this), _amountMinusFee);
-
         emit Deposit(_msgSender(), _amountMinusFee, _fee);
 
     }
 
 
-
-    /**
-     * @notice Get user info
-     * @param _user The address of the user
-     * @param _rewardToken The address of the reward token
-     * @return The amount of AGFI user has deposited
-     * @return The reward debt for the chosen token
-     */
-
-    function getUserInfo(address _user, IERC20 _rewardToken) external view returns (uint256, uint256,uint,uint) {
-
-        UserInfo storage user = userInfo[_user];
-
-        return (user.amount, user.rewardStake[_rewardToken],user.rewardSLRAddToStak,user.dateOfEntry);
-
+     function numberOfSalaryReward() public view returns(uint256) {
+        uint256 _numberOfDay=block.timestamp.sub(reawrdsInfo[salary].lastDistribution).div(DAY);
+        if(_numberOfDay>reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut))
+        _numberOfDay=reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut);
+        if(_numberOfDay==0)return 0;
+        else return _numberOfDay.mul(reawrdsInfo[salary].amount).div(reawrdsInfo[salary].numberOfDay);
     }
 
 
 
-    /**
-     * @notice Get the number of reward tokens
-     * @return The length of the array
-     */
-
-    function rewardTokensLength() external view returns (uint256) {
-
-        return rewardTokens.length;
-
-    }
-
-
-
-    /**
-     * @notice Add a reward token
-     * @param _rewardToken The address of the reward token
-     */
-
-    function addRewardToken(IERC20 _rewardToken) external onlyOwner {
-
-        require(
-
-            !isRewardToken[_rewardToken] && address(_rewardToken) != address(0),
-
-            "SLRStaking: token can't be added"
-
-        );
-
-        require(rewardTokens.length < 25, "SLRStaking: list of token too big");
-
-        rewardTokens.push(_rewardToken);
-
-        isRewardToken[_rewardToken] = true;
-
-        updateReward(_rewardToken);
-
-        emit RewardTokenAdded(address(_rewardToken));
-
-    }
-
-
-
-    /**
-     * @notice Remove a reward token
-     * @param _rewardToken The address of the reward token
-     */
-
-    function removeRewardToken(IERC20 _rewardToken) external onlyOwner {
-
-        require(isRewardToken[_rewardToken], "SLRIStaking: token can't be removed");
-
-        updateReward(_rewardToken);
-
-        isRewardToken[_rewardToken] = false;
-
-        uint256 _len = rewardTokens.length;
-
-        for (uint256 i; i < _len; i++) {
-
-            if (rewardTokens[i] == _rewardToken) {
-
-                rewardTokens[i] = rewardTokens[_len - 1];
-
-                rewardTokens.pop();
-
-                break;
-
-            }
-
-        }
-
-        emit RewardTokenRemoved(address(_rewardToken));
-
-    }
-
-
-
-    /**
-     * @notice Set the deposit fee percent
-     * @param _depositFeePercent The new deposit fee percent
-     */
-
-    function setDepositFeePercent(uint256 _depositFeePercent) external onlyOwner {
-
-        require(_depositFeePercent <= 5e17, "AGFIStaking: deposit fee can't be greater than 50%");
-
-        uint256 oldFee = depositFeePercent;
-
-        depositFeePercent = _depositFeePercent;
-
-        emit DepositFeeChanged(_depositFeePercent, oldFee);
-
-    }
-
-
-
-    /**
-     * @notice View function to see pending reward token on frontend
-     * @param _user The address of the user
-     * @param _token The address of the token
-     * @return `_user`'s pending reward token
-     */
-
-   function pendingReward(address _user, IERC20 _token) public view returns (uint256) {
-
-        require(isRewardToken[_token], "AGFIStaking: wrong reward token");
-
-        UserInfo storage user = userInfo[_user];
-
-        uint256 _totalSLR = internalSLRBalance;
-
-        uint256 _accRewardTokenPerShare = accRewardPerShare[_token];
-
-
-
-        uint256 _currRewardBalance = _token.balanceOf(address(this));
-
-        uint256 _rewardBalance = _token == salary ? _currRewardBalance.sub(_totalSLR) : _currRewardBalance;
-
-
-
-        if (_rewardBalance != lastRewardBalance[_token] && _totalSLR != 0) {
-
-            uint256 _accruedReward = _rewardBalance.sub(lastRewardBalance[_token]);
-
-            _accRewardTokenPerShare = _accRewardTokenPerShare.add(
-
-                _accruedReward.mul(ACC_REWARD_PER_SHARE_PRECISION).div(_totalSLR)
-
-            );
-
-        }
-
-        return
-
-            user.amount.mul(_accRewardTokenPerShare).div(ACC_REWARD_PER_SHARE_PRECISION).sub(user.rewardStake[_token]);
-
-    }
-
-
-     /**
-     * @notice Add reward salary to desposit amount
-     */
-
-    function addRewardSalaryToStake() external nonReentrant{
-
+   function restake() external nonReentrant{
         uint _salaryPending=pendingReward(_msgSender(),salary);
-
         require(_salaryPending>0 ,"You do not have Salary pending reward");
-        
         UserInfo storage user = userInfo[_msgSender()];
-
         uint256 _previousAmount = user.amount;
-
         uint256 _len = rewardTokens.length;
-
-         user.amount = _previousAmount.add(_salaryPending);
-
+        user.amount = _previousAmount.add(_salaryPending);
         internalSLRBalance = internalSLRBalance.add(_salaryPending);
-
         for (uint256 i; i < _len; i++) {
-
             IERC20 _token = rewardTokens[i];
-
             updateReward(_token);
-
         }
-       
         user.rewardSLRAddToStak=user.rewardSLRAddToStak.add(_salaryPending);
-        
         emit AddPendingReward(_salaryPending);
 
     }
 
 
-
-     /**
-     * @notice Claim all rewards
-     */
-
-
-
-    function claimReward() public {
-
+    function claim() public {
         UserInfo storage user = userInfo[_msgSender()];
-
         uint256 _previousAmount = user.amount;
-
         uint256 _len = rewardTokens.length;
-
         for (uint256 i; i < _len; i++) {
-
             IERC20 _token = rewardTokens[i];
-
             updateReward(_token);
-
             uint256 _previousRewardDebt = user.rewardStake[_token];
-
             user.rewardStake[_token] = _previousAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION);
-
             if (_previousAmount != 0) {
-
-                uint256 _pending = _previousAmount
-
-                    .mul(accRewardPerShare[_token])
-
-                    .div(ACC_REWARD_PER_SHARE_PRECISION)  //100
-
-                    .sub(_previousRewardDebt);
-
+                uint256 _pending = _previousAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION).sub(_previousRewardDebt);
                 if (_pending != 0) {
-
                     safeTokenTransfer(_token, _msgSender(), _pending);
-
                     emit ClaimReward(_msgSender(), address(_token), _pending);
-
                 }
-
             }
-
          } 
+    }
+
+
+    function userInformation(address _user, IERC20 _rewardToken) external view returns (uint256, uint256,uint,uint) {
+        UserInfo storage user = userInfo[_user];
+        return (user.amount, user.rewardStake[_rewardToken],user.rewardSLRAddToStak,user.dateOfEntry);
+    }
+
+
+    function numberRewardTokens() external view returns (uint256) {return rewardTokens.length;}
+
+    function addRewardToken(IERC20 _rewardToken) external onlyOwner {
+        require(!isRewardToken[_rewardToken] && address(_rewardToken) != address(0), "SLRStaking: token can't be added");
+        rewardTokens.push(_rewardToken);
+        isRewardToken[_rewardToken] = true;
+        updateReward(_rewardToken);
+        emit RewardTokenAdded(address(_rewardToken));
 
     }
 
 
+    function removeRewardToken(IERC20 _rewardToken) external onlyOwner {
+        require(isRewardToken[_rewardToken], "SLRIStaking: token can't be removed");
+        updateReward(_rewardToken);
+        isRewardToken[_rewardToken] = false;
+        uint256 _len = rewardTokens.length;
+        for (uint256 i; i < _len; i++) {
+            if (rewardTokens[i] == _rewardToken) {
+                rewardTokens[i] = rewardTokens[_len - 1];
+                rewardTokens.pop();
+                break;
+            }
+        }
+        emit RewardTokenRemoved(address(_rewardToken));
+    }
 
-    /**
-     * @notice Withdraw SLR and harvest the rewards
-     */
+
+
+   function pendingReward(address _user, IERC20 _token) public view returns (uint256) {
+        require(isRewardToken[_token], "SLRStaking: wrong reward token");
+        UserInfo storage user = userInfo[_user];
+        uint256 _totalSLR = internalSLRBalance;
+        uint256 _accRewardTokenPerShare = accRewardPerShare[_token];
+        uint256 _currRewardBalance = _token.balanceOf(address(this));
+        uint256 _rewardBalance = _token == salary ? _currRewardBalance.sub(_totalSLR) : _currRewardBalance;
+        if (_rewardBalance != lastRewardBalance[_token] && _totalSLR != 0) {
+            uint256 _accruedReward = _rewardBalance.sub(lastRewardBalance[_token]);
+            _accRewardTokenPerShare = _accRewardTokenPerShare.add( _accruedReward.mul(ACC_REWARD_PER_SHARE_PRECISION).div(_totalSLR));
+        }
+        return user.amount.mul(_accRewardTokenPerShare).div(ACC_REWARD_PER_SHARE_PRECISION).sub(user.rewardStake[_token]);
+
+    }
 
        function withdraw() external nonReentrant {
-
         UserInfo storage user = userInfo[_msgSender()];
-
         uint _numberDayOfEntry=(block.timestamp-user.dateOfEntry)/DAY;
-
         require(_numberDayOfEntry>=30,"You have to wait 30 days");
-
         uint256 _previousAmount = user.amount;
-
         require(_previousAmount > 0 , "SLRStaking: withdraw amount exceeds balance");
-
         uint256 _newAmount = user.amount.sub(_previousAmount);
-
         user.amount = _newAmount;
-
         uint256 _len = rewardTokens.length;
-
         if (_previousAmount != 0) {
-
             for (uint256 i; i < _len; i++) {
-
                 IERC20 _token = rewardTokens[i];
-
                 updateReward(_token);
-
-
-
-                uint256 _pending = _previousAmount
-
-                    .mul(accRewardPerShare[_token])
-
-                    .div(ACC_REWARD_PER_SHARE_PRECISION)
-
-                    .sub(user.rewardStake[_token]);
-
+                uint256 _pending = _previousAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION).sub(user.rewardStake[_token]);
                 user.rewardStake[_token] = _newAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION);
-
-
-
                 if (_pending != 0) {
-
                     safeTokenTransfer(_token, _msgSender(), _pending);
-
                     emit ClaimReward(_msgSender(), address(_token), _pending);
-
                 }
-
             }
-
         }
-
-        
         internalSLRBalance = internalSLRBalance.sub(_previousAmount);
-
         salary.safeTransfer(_msgSender(), _previousAmount);
-
         if(_previousAmount>0) user.dateOfEntry=0;
-
         emit Withdraw(_msgSender(), _previousAmount);
-
     }
 
 
-
-    /**
-     * @notice Withdraw without caring about rewards. EMERGENCY ONLY
-     */
     function emergencyWithdraw() external nonReentrant {
-
         UserInfo storage user = userInfo[_msgSender()];
-
         require(user.amount>0,"you dont have any salary disposit");
-
         uint256 _previousAmount = user.amount;
-
         uint256 _newAmount = user.amount.sub(_previousAmount);
-
         user.amount = _newAmount;
-
         uint _numberDayOfEntry=(block.timestamp-user.dateOfEntry)/DAY;
-
         uint256 _len = rewardTokens.length;
-
         if (_previousAmount != 0) {
-
             for (uint256 i; i < _len; i++) {
-
                 IERC20 _token = rewardTokens[i];
-
                 updateReward(_token);
-
-                uint256 _pending = _previousAmount
-
-                    .mul(accRewardPerShare[_token])
-
-                    .div(ACC_REWARD_PER_SHARE_PRECISION)
-
-                    .sub(user.rewardStake[_token]);
-
+                uint256 _pending = _previousAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION).sub(user.rewardStake[_token]);
                 user.rewardStake[_token] = _newAmount.mul(accRewardPerShare[_token]).div(ACC_REWARD_PER_SHARE_PRECISION);
-
-
-
                 if (_pending != 0) {
-
                     safeTokenTransfer(_token, _msgSender(), _pending);
-
                     emit ClaimReward(_msgSender(), address(_token), _pending);
-
                 }
-
             }
-
         }
 
         uint _withdrawAmount;
-        
         if(_numberDayOfEntry<=30)_withdrawAmount=_previousAmount.sub(_previousAmount.mul(30 -_numberDayOfEntry).div(100));
-
         else _withdrawAmount=_previousAmount;
-        
         internalSLRBalance = internalSLRBalance.sub(_previousAmount);
-
         salary.safeTransfer(_msgSender(), _withdrawAmount);
-
         if(_withdrawAmount>0) user.dateOfEntry=0;
-
         salary.safeTransfer(owner(),_previousAmount.sub(_withdrawAmount));
-
         emit Withdraw(_msgSender(), _previousAmount);
-
     }
 
 
 
     function addRewardsSalaryByNumberDay(uint _amount , uint _numberOfDay) public onlyOwner {
-
         require(isRewardToken[salary], "SLRIStaking: token can't be removed");
-
         require(salary.allowance(_msgSender(),address(this))>=_amount,"this amount not approved by owner");
-
         reawrdsInfo[salary].amount=reawrdsInfo[salary].amount.add(_amount);
-       
         reawrdsInfo[salary].numberOfDay=reawrdsInfo[salary].numberOfDay.add(_numberOfDay);
-
         reawrdsInfo[salary].timeOfAddReward=block.timestamp;
-
         reawrdsInfo[salary].lastDistribution=block.timestamp;
-
         emit addRewardByNumberDay(_amount,_numberOfDay,salary);
-
     }
 
 
-    function numberOfSalaryReward() public view returns(uint256) {
 
-        uint256 _numberOfDay=block.timestamp.sub(reawrdsInfo[salary].lastDistribution).div(DAY);
-
-        if(_numberOfDay>reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut))
-
-        _numberOfDay=reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut);
-
-        if(_numberOfDay==0)return 0;
-
-        else return _numberOfDay.mul(reawrdsInfo[salary].amount).div(reawrdsInfo[salary].numberOfDay);
-        
-    }
-   
 
      function getNuberDaysCanShared() public view returns(uint) {
-
-
-         return
-         
-          numberOfSalaryReward().mul(reawrdsInfo[salary].numberOfDay).div(reawrdsInfo[salary].amount);
+         return numberOfSalaryReward().mul(reawrdsInfo[salary].numberOfDay).div(reawrdsInfo[salary].amount);
      }
 
 
-    /**
-     * @notice Update reward variables
-     * @param _token The address of the reward token
-     * @dev Needs to be called before any deposit or withdrawal
-     */
-     
-
    function updateReward(IERC20 _token) public {
-
         require(isRewardToken[_token], "SLRStaking: wrong reward token");
-        
         if(numberOfSalaryReward() > 0 && reawrdsInfo[_token].numberOfDay>0 && _token == salary){
-
             salary.transferFrom(owner(),address(this),numberOfSalaryReward());
-
             reawrdsInfo[salary].numberOfDayDistribut = reawrdsInfo[salary].numberOfDayDistribut.add(getNuberDaysCanShared());
- 
             reawrdsInfo[salary].lastDistribution=block.timestamp;
-
         }
-
-
         uint256 _totalSLR = internalSLRBalance;
-
         uint256 _currRewardBalance = _token.balanceOf(address(this));
-
         uint256 _rewardBalance = _token == salary ? _currRewardBalance.sub(_totalSLR) : _currRewardBalance;
-
-
-
-        // Did SLRStaking receive any token
-
-        if (_rewardBalance == lastRewardBalance[_token] || _totalSLR == 0) {
-
-            return;
-
-        }
-
+        if (_rewardBalance == lastRewardBalance[_token] || _totalSLR == 0) return;
         uint256 _accruedReward = _rewardBalance.sub(lastRewardBalance[_token]);
-
-
-        accRewardPerShare[_token] = accRewardPerShare[_token].add(
-
-            _accruedReward.mul(ACC_REWARD_PER_SHARE_PRECISION).div(_totalSLR)
-
-        );
-
+        accRewardPerShare[_token] = accRewardPerShare[_token].add(_accruedReward.mul(ACC_REWARD_PER_SHARE_PRECISION).div(_totalSLR));
         lastRewardBalance[_token] = _rewardBalance;
 
     }
 
 
-
-
-
-
-    /**
-     * @notice Safe token transfer function, just in case if rounding error
-     * causes pool to not have enough reward tokens
-     * @param _token The address of then token to transfer
-     * @param _to The address that will receive `_amount` `rewardToken`
-     * @param _amount The amount to send to `_to`
-     */
-
-    function safeTokenTransfer(
-
-        IERC20 _token,
-
-        address _to,
-
-        uint256 _amount
-
-    ) internal {
-
+    function safeTokenTransfer(IERC20 _token,address _to, uint256 _amount) internal {
         uint256 _currRewardBalance = _token.balanceOf(address(this));
-
         uint256 _rewardBalance = _token == salary ? _currRewardBalance.sub(internalSLRBalance) : _currRewardBalance;
-
-
-
         if (_amount > _rewardBalance) {
-
             lastRewardBalance[_token] = lastRewardBalance[_token].sub(_rewardBalance);
-
             _token.safeTransfer(_to, _rewardBalance);
-
         } else {
-
             lastRewardBalance[_token] = lastRewardBalance[_token].sub(_amount);
-
             _token.safeTransfer(_to, _amount);
-
         }
-
     }
-
 }
