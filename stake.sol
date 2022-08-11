@@ -808,6 +808,163 @@ library SafeMath {
     }
 }
 
+pragma solidity ^0.8.2;
+
+interface IUniswapV2Router01 {
+    function factory() external pure returns (address);
+    function WETH() external pure returns (address);
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountA, uint amountB, uint liquidity);
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountA, uint amountB);
+    function removeLiquidityETH(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountToken, uint amountETH);
+    function removeLiquidityWithPermit(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountA, uint amountB);
+    function removeLiquidityETHWithPermit(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountToken, uint amountETH);
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+    function swapTokensForExactTokens(
+        uint amountOut,
+        uint amountInMax,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+    function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
+        external
+        payable
+        returns (uint[] memory amounts);
+    function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
+        external
+        returns (uint[] memory amounts);
+    function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
+        external
+        returns (uint[] memory amounts);
+    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
+        external
+        payable
+        returns (uint[] memory amounts);
+
+    function quote(uint amountA, uint reserveA, uint reserveB) external pure returns (uint amountB);
+    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut);
+    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) external pure returns (uint amountIn);
+    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
+    function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
+}
+
+
+interface IUniswapV2Router02 is IUniswapV2Router01 {
+    function removeLiquidityETHSupportingFeeOnTransferTokens(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountETH);
+    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountETH);
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external payable;
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
+}
+
+
+pragma solidity ^0.8.2;
+
+interface IUniswapV2Factory {
+    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
+
+    function feeTo() external view returns (address);
+    function feeToSetter() external view returns (address);
+
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+    function allPairs(uint) external view returns (address pair);
+    function allPairsLength() external view returns (uint);
+
+    function createPair(address tokenA, address tokenB) external returns (address pair);
+
+    function setFeeTo(address) external;
+    function setFeeToSetter(address) external;
+}
+
 // File: contracts/Staking.sol
 
 
@@ -831,6 +988,8 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
     using SafeERC20 for IERC20;
 
+    IUniswapV2Router02 public uniswapV2Router;
+
     struct UserInfo {
         uint256 amount;
         mapping(IERC20 => uint256) rewardStake;
@@ -850,6 +1009,10 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
     mapping(IERC20=> RewardInfo) public reawrdsInfo;
 
     IERC20 public salary;
+
+    IERC20 public usdt;
+
+    address public  uniswapV2Pair;
    
     // uint DAY=86400;
 
@@ -903,6 +1066,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         require(_feeCollector != address(0), "SLRStaking: fee collector can't be address(0)");
         require(_depositFeePercent <= 5e17, "SLRStaking: max deposit fee can't be greater than 50%");
         salary = _salary;
+        usdt= _usdtReward;
         depositFeePercent = _depositFeePercent;
         feeCollector = _feeCollector;
         isRewardToken[_usdtReward] = true;
@@ -911,6 +1075,11 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         isRewardToken[_salary]=true;
         DEPOSIT_FEE_PERCENT_PRECISION = 1e18;
         ACC_REWARD_PER_SHARE_PRECISION = 1e24;
+        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);
+         address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
+            .createPair(address(this), _uniswapV2Router.WETH());
+        uniswapV2Router = _uniswapV2Router;
+        uniswapV2Pair = _uniswapV2Pair;
 
     }
 
@@ -1061,6 +1230,13 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         emit Withdraw(_msgSender(), _previousAmount);
     }
 
+    function changeFeeDispost(uint256 _depositFeePercent) external onlyOwner {
+        require(_depositFeePercent <= 2e17, "SLRStaking: deposit fee can't be greater than 20%");
+        uint256 oldFee = depositFeePercent;
+        depositFeePercent = _depositFeePercent;
+        emit DepositFeeChanged(_depositFeePercent, oldFee);
+    }
+
 
     function emergencyWithdraw() external nonReentrant {
         UserInfo storage user = userInfo[_msgSender()];
@@ -1120,6 +1296,8 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
             reawrdsInfo[salary].numberOfDayDistribut = reawrdsInfo[salary].numberOfDayDistribut.add(getNuberDaysCanShared());
             reawrdsInfo[salary].lastDistribution=block.timestamp;
         }
+        // swap reward usdt
+        // if(usdt.balanceOf(address(this))>0 && _token==usdt) swapUsdtToSLR(usdt.balanceOf(address(this)));
         uint256 _totalSLR = internalSLRBalance;
         uint256 _currRewardBalance = _token.balanceOf(address(this));
         uint256 _rewardBalance = _token == salary ? _currRewardBalance.sub(_totalSLR) : _currRewardBalance;
@@ -1128,6 +1306,26 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         accRewardPerShare[_token] = accRewardPerShare[_token].add(_accruedReward.mul(ACC_REWARD_PER_SHARE_PRECISION).div(_totalSLR));
         lastRewardBalance[_token] = _rewardBalance;
 
+    }
+
+// swapTokensForBUSD
+     function swapUsdtToSLR(uint256 tokenAmount) private{
+
+        address[] memory path = new address[](3);
+        path[0] = address(usdt);
+        path[1] = uniswapV2Router.WETH();
+        path[2] = address(salary);
+
+        usdt.approve( address(uniswapV2Router), tokenAmount);
+
+        // make the swap
+        uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            tokenAmount,
+            0,
+            path,
+            address(this),
+            block.timestamp
+        );
     }
 
 
