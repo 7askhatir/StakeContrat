@@ -985,6 +985,7 @@ pragma solidity ^0.8.14;
 contract SalaryStaking is Ownable, ReentrancyGuard {
 
     using SafeMath for uint256;
+    uint DAY=60;
 
     using SafeERC20 for IERC20;
 
@@ -997,16 +998,7 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         uint dateOfEntry;
     }
 
-    struct RewardInfo{
-        uint256 amount;
-        uint256 numberOfDay;
-        uint256 numberOfDayDistribut;
-        uint256 timeOfAddReward;
-        uint256 lastDistribution;
-    }
-
-
-    mapping(IERC20=> RewardInfo) public reawrdsInfo;
+ 
 
     IERC20 public salary;
 
@@ -1016,7 +1008,6 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
    
     // uint DAY=86400;
 
-    uint256 DAY=600;
 
     uint MAX_DISPOSIT=200*10**18;
 
@@ -1075,11 +1066,11 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
         isRewardToken[_salary]=true;
         DEPOSIT_FEE_PERCENT_PRECISION = 1e18;
         ACC_REWARD_PER_SHARE_PRECISION = 1e24;
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);
-         address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
-            .createPair(address(this), _uniswapV2Router.WETH());
-        uniswapV2Router = _uniswapV2Router;
-        uniswapV2Pair = _uniswapV2Pair;
+        // IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);
+        //  address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
+        //     .createPair(address(this), _uniswapV2Router.WETH());
+        // uniswapV2Router = _uniswapV2Router;
+        // uniswapV2Pair = _uniswapV2Pair;
 
     }
 
@@ -1090,47 +1081,36 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
        uint256 _fee = _amount.mul(depositFeePercent).div(DEPOSIT_FEE_PERCENT_PRECISION);
        uint256 _amountMinusFee = _amount.sub(_fee);
        uint256 _newAmount = user.amount.add(_amountMinusFee);
-       user.amount = _newAmount;
        if(user.dateOfEntry==0)user.dateOfEntry=block.timestamp;
-       uint256 _len = rewardTokens.length;
-       for (uint256 i; i < _len; i++) {
-            IERC20 _token = rewardTokens[i];
-            updateReward(_token);
-        }
+       user.amount = _newAmount;
         internalSLRBalance = internalSLRBalance.add(_amountMinusFee);
         if(_fee>0)salary.safeTransferFrom(_msgSender(), feeCollector, _fee);
         salary.safeTransferFrom(_msgSender(), address(this), _amountMinusFee);
         emit Deposit(_msgSender(), _amountMinusFee, _fee);
+        
 
     }
 
 
-     function numberOfSalaryReward() public view returns(uint256) {
-        uint256 _numberOfDay=block.timestamp.sub(reawrdsInfo[salary].lastDistribution).div(DAY);
-        if(_numberOfDay>reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut))
-        _numberOfDay=reawrdsInfo[salary].numberOfDay.sub(reawrdsInfo[salary].numberOfDayDistribut);
-        if(_numberOfDay==0)return 0;
-        else return _numberOfDay.mul(reawrdsInfo[salary].amount).div(reawrdsInfo[salary].numberOfDay);
-    }
+   
 
 
 
-   function restake() external nonReentrant{
+   function restake() public{
         uint _salaryPending=pendingReward(_msgSender(),salary);
-        require(_salaryPending>0 ,"You do not have Salary pending reward");
-        UserInfo storage user = userInfo[_msgSender()];
-        uint256 _previousAmount = user.amount;
-        uint256 _len = rewardTokens.length;
-        user.amount = _previousAmount.add(_salaryPending);
-        internalSLRBalance = internalSLRBalance.add(_salaryPending);
-        for (uint256 i; i < _len; i++) {
-            IERC20 _token = rewardTokens[i];
-            updateReward(_token);
-        }
+        require(_salaryPending>0 ,"You dont have Salary pending reward");
+        UserInfo storage  user = userInfo[_msgSender()];
+        user.amount = user.amount.add(_salaryPending);
         user.rewardSLRAddToStak=user.rewardSLRAddToStak.add(_salaryPending);
+        if(_salaryPending>0) {
+            internalSLRBalance=internalSLRBalance.add(_salaryPending);
+            updateReward(salary);
+        }
         emit AddPendingReward(_salaryPending);
-
+// 200000000000000000000
     }
+
+    
 
 
     function claim() public {
@@ -1271,31 +1251,16 @@ contract SalaryStaking is Ownable, ReentrancyGuard {
 
 
 
-    function addRewardsSalaryByNumberDay(uint _amount , uint _numberOfDay) public onlyOwner {
-        require(isRewardToken[salary], "SLRIStaking: token can't be removed");
-        require(salary.allowance(_msgSender(),address(this))>=_amount,"this amount not approved by owner");
-        reawrdsInfo[salary].amount=reawrdsInfo[salary].amount.add(_amount);
-        reawrdsInfo[salary].numberOfDay=reawrdsInfo[salary].numberOfDay.add(_numberOfDay);
-        reawrdsInfo[salary].timeOfAddReward=block.timestamp;
-        reawrdsInfo[salary].lastDistribution=block.timestamp;
-        emit addRewardByNumberDay(_amount,_numberOfDay,salary);
-    }
+    
 
 
 
 
-     function getNuberDaysCanShared() public view returns(uint) {
-         return numberOfSalaryReward().mul(reawrdsInfo[salary].numberOfDay).div(reawrdsInfo[salary].amount);
-     }
+     
 
 
    function updateReward(IERC20 _token) public {
         require(isRewardToken[_token], "SLRStaking: wrong reward token");
-        if(numberOfSalaryReward() > 0 && reawrdsInfo[_token].numberOfDay>0 && _token == salary){
-            salary.transferFrom(owner(),address(this),numberOfSalaryReward());
-            reawrdsInfo[salary].numberOfDayDistribut = reawrdsInfo[salary].numberOfDayDistribut.add(getNuberDaysCanShared());
-            reawrdsInfo[salary].lastDistribution=block.timestamp;
-        }
         // swap reward usdt
         // if(usdt.balanceOf(address(this))>0 && _token==usdt) swapUsdtToSLR(usdt.balanceOf(address(this)));
         uint256 _totalSLR = internalSLRBalance;
